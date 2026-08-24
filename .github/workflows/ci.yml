@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Parity with ux-compose classifiers (3.11–3.14).
+        # ux-dom full stack prefers 3.14; ux-fnbase stays usable from 3.11+.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+      - name: Test
+        run: |
+          export PYTHONPATH=src:.
+          python -m pytest -q
+      - name: Fanout benchmark smoke
+        run: |
+          export PYTHONPATH=src:.
+          python benchmarks/bench_fanout.py --subscribers 10 --mutations 20
