@@ -4,9 +4,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 
-> **New here?** [docs/START_HERE.md](docs/START_HERE.md) (5 minutes) · [docs/FAQ.md](docs/FAQ.md) · [docs/INDEX.md](docs/INDEX.md)
-
-**Function database** — pure-function queries and mutations, automatic read-set tracking, ACID writes, live subscriptions. Fail-closed. Pure Python. Zero runtime dependencies.
+Function database: pure-function queries and mutations, read-set tracking, ACID writes, live subscriptions.
 
 Queries are ordinary Python functions. The runtime records every document, index key, and table scan they observe. Mutations are single-writer serializable. After a commit, only subscriptions whose **read-set intersects** the write-set re-run.
 
@@ -16,35 +14,52 @@ Inspired by the reactive-function model popularized by [Convex](https://www.conv
 | --- | --- |
 | **Package** | `ux_fnbase` |
 | **Version** | `0.1.0` |
-| **Python** | ≥ 3.11 (family parity with ux-compose; 3.11–3.14) |
+| **Python** | ≥ 3.11 (tested 3.11–3.14) |
 | **License** | [Apache-2.0](LICENSE) |
 | **Deps (core)** | stdlib only |
-
----
-
-## Why ux-fnbase
-
-| Problem | ux-fnbase answer |
-| --- | --- |
-| ORM + hand-rolled cache invalidation | Queries declare nothing; the runtime records reads |
-| WebSocket fanout of “everything changed” | Precise token intersection — only affected subs re-run |
-| Nested writes from reactive callbacks | Phase machine: notify-phase mutation → `NestedTransactionError` |
-| Partial commit on disk failure | Persist-before-publish; pre-image rollback on durability failure |
-| UI layer coupled to the database | Isolation Law: `ux_fnbase` never imports compose / MorphState / Channel |
 
 **What it is for:** application backends and local-first UIs that want *backend as pure functions* — board views, live dashboards, multi-pane editors that stay consistent without a separate cache layer.
 
 **What it is not:** a multi-node distributed database, a SQL engine, a Convex-compatible cloud service, or a UI framework. Multi-process and multi-host replication are out of scope for 0.1.0 (single process, single writer).
 
----
+## Table of Contents
 
-## Quick start
+- [Install](#install)
+- [Usage](#usage)
+- [Why ux-fnbase](#why-ux-fnbase)
+- [Family Python policy](#family-python-policy)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [Core concepts](#core-concepts)
+- [Guarantees](#guarantees)
+- [Hard limits](#hard-limits)
+- [API](#api)
+- [Playground / wire](#playground--wire)
+- [Testing](#testing)
+- [Versioning](#versioning)
+- [Security](#security)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Install
+
+Core has **no** third-party dependencies.
 
 ```bash
-# from this repository
+pip install -e .                 # from this repository
+pip install -e ".[dev]"          # pytest, hypothesis, fastapi, httpx
+pip install -e ".[playground]"   # FastAPI host helpers only
+```
+
+There is no published PyPI release required to use the tree:
+
+```bash
+cd ux-fnbase
 export PYTHONPATH=src:.
 python -c "from ux_fnbase import Store; print(Store)"
 ```
+
+## Usage
 
 ```python
 from ux_fnbase import Store, TableSchema, string, literal
@@ -82,7 +97,17 @@ unsub()
 store.close()
 ```
 
----
+Five-minute path: [docs/START_HERE.md](docs/START_HERE.md).
+
+## Why ux-fnbase
+
+| Problem | ux-fnbase answer |
+| --- | --- |
+| ORM + hand-rolled cache invalidation | Queries declare nothing; the runtime records reads |
+| WebSocket fanout of “everything changed” | Precise token intersection — only affected subs re-run |
+| Nested writes from reactive callbacks | Phase machine: notify-phase mutation → `NestedTransactionError` |
+| Partial commit on disk failure | Persist-before-publish; pre-image rollback on durability failure |
+| UI layer coupled to the database | Isolation Law: `ux_fnbase` never imports compose / MorphState / Channel |
 
 ## Family Python policy
 
@@ -95,32 +120,11 @@ store.close()
 
 ux-fnbase is a sibling data plane: it must run on every Python the compose host supports, without requiring ux-dom’s 3.14 floor when used alone.
 
-## Install (development)
-
-Core has **no** third-party dependencies. Optional extras:
-
-```bash
-pip install -e ".[dev]"          # pytest, hypothesis, fastapi, httpx
-pip install -e ".[playground]"   # FastAPI host helpers only
-```
-
-Editable layout uses `src/`:
-
-```bash
-cd ux-fnbase
-export PYTHONPATH=src:.
-python -m pytest -q
-```
-
-There is no published PyPI release required to use the tree: set `PYTHONPATH=src:.` or `pip install -e .` from this directory.
-
----
-
 ## Repository layout
 
 ```
 ux-fnbase/
-├── src/ux_fnbase/           # Core library (stdlib only) — THE product
+├── src/ux_fnbase/        # Core library (stdlib only) — THE product
 │   ├── store.py          # Store, phases, subscribe, durability
 │   ├── tokens.py         # DocToken / IndexToken / ScanToken / intersects
 │   ├── schema.py         # TableSchema, string, literal, integer
@@ -129,43 +133,35 @@ ux-fnbase/
 │   ├── errors.py         # Fail-closed exception hierarchy
 │   └── __init__.py       # Public exports
 ├── playground/           # Optional demo composition root — NOT a ux-fnbase dep
-│   ├── demo.py           # Sample schema, queries, mutations
-│   ├── host.py           # HOST: binds store + wire
-│   ├── wire/             # QueryBinding, MutationDoor, LivePush, Intent
-│   └── tests/            # Isolation Law + residual-closure tests
-├── tests/                # Core unit tests
-├── docs/                 # Architecture, API, wire, guarantees, glossary
-├── pyproject.toml
-├── LICENSE               # Apache-2.0
-├── SECURITY.md
-├── CONTRIBUTING.md
-└── CHANGELOG.md
+├── tests/
+├── docs/
+└── pyproject.toml
 ```
 
 **Rule:** product application code that only needs the database depends on `ux_fnbase`. The `playground/` package is a reference composition pattern for hypermedia UIs; it must never be imported by `src/ux_fnbase`.
 
----
+## Documentation
 
-## Documentation map
+Family contract: [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) (Diátaxis + Standard Readme + GitHub community files).
 
-| Doc | Contents |
-| --- | --- |
-| [docs/START_HERE.md](docs/START_HERE.md) | **Start here** — 5-minute onboarding |
-| [docs/FAQ.md](docs/FAQ.md) | Convex? async? compose? production? |
-| [docs/INDEX.md](docs/INDEX.md) | Full reading order for humans and agents |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Phases, tokens, commit, notify, durability |
-| [docs/API.md](docs/API.md) | Complete public API (Store, schema, tokens, errors) |
-| [docs/GUARANTEES.md](docs/GUARANTEES.md) | Isolation levels, limits, what is / is not promised |
-| [docs/WIRE.md](docs/WIRE.md) | QueryBinding, MutationDoor, LivePush, Intent |
-| [docs/COMPOSE.md](docs/COMPOSE.md) | Isolation Law vs ux-compose; residuals closed |
-| [docs/GLOSSARY.md](docs/GLOSSARY.md) | Terms used in this repo |
-| [AGENTS.md](AGENTS.md) | Hard laws for coding agents |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to change code and prove residuals |
-| [SECURITY.md](SECURITY.md) | Threat model and reporting |
+| You are… | Start |
+|----------|--------|
+| **New** | [docs/START_HERE.md](docs/START_HERE.md) |
+| **Need the map** | [docs/INDEX.md](docs/INDEX.md) |
+| **Need facts** | [docs/API.md](docs/API.md) · [docs/GUARANTEES.md](docs/GUARANTEES.md) |
+| **Why it works this way** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| **Contributor / agent** | [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) |
+| **Security reviewer** | [SECURITY.md](SECURITY.md) |
+| **Questions** | [docs/FAQ.md](docs/FAQ.md) · [SUPPORT.md](SUPPORT.md) |
 
----
+| Diátaxis | Pages |
+|----------|--------|
+| Tutorial | [docs/START_HERE.md](docs/START_HERE.md) |
+| How-to | [docs/FAQ.md](docs/FAQ.md) · [docs/WIRE.md](docs/WIRE.md) · [docs/COMPOSE.md](docs/COMPOSE.md) |
+| Reference | [docs/API.md](docs/API.md) · [docs/GUARANTEES.md](docs/GUARANTEES.md) · [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| Explanation | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
-## Core concepts (one screen)
+## Core concepts
 
 1. **Tables** — named document collections with optional equality indexes and schema.
 2. **Queries** — pure functions `@store.query def name(ctx, **args)`. They only read via `ctx.db`.
@@ -176,11 +172,9 @@ ux-fnbase/
 7. **Generation** — monotonic commit counter; does not advance on thrown mutations.
 8. **Phase** — `idle | query | mutation | notify`. Illegal crossings raise.
 
-System fields on every document: `_id` (26-char), `_creationTime` (ms), `_generation` (commit that wrote the row). Application fields must not use names starting with `_` in schema validation paths that strip reserved keys.
+System fields on every document: `_id` (26-char), `_creationTime` (ms), `_generation` (commit that wrote the row). Application fields must not use names starting with `_`.
 
----
-
-## Guarantees (summary)
+## Guarantees
 
 | Guarantee | Status in 0.1.0 |
 | --- | --- |
@@ -196,9 +190,7 @@ System fields on every document: `_id` (26-char), `_creationTime` (ms), `_genera
 
 Full detail: [docs/GUARANTEES.md](docs/GUARANTEES.md).
 
----
-
-## Hard limits (fail closed)
+## Hard limits
 
 | Limit | Value |
 | --- | --- |
@@ -212,9 +204,23 @@ Full detail: [docs/GUARANTEES.md](docs/GUARANTEES.md).
 
 Exceeding a limit raises `LimitExceededError`. Limits are constants in `ux_fnbase.store` — change them only deliberately and with tests.
 
----
+## API
 
-## Playground / wire (optional)
+Public names are exactly `ux_fnbase.__all__`:
+
+| Export | Role |
+|--------|------|
+| `Store` | Tables, `@query` / `@mutation`, `run_query` / `run_mutation`, `subscribe` |
+| `AtomicJsonBackend` | Durable file backend |
+| `QueryMeta` | Subscription metadata (`generation`, …) |
+| `TableSchema`, `string`, `literal`, `integer` | Optional schema |
+| `new_id` | 26-character document ids |
+| `DocToken`, `IndexToken`, `ScanToken`, `intersects` | Read/write-set tokens |
+| `UxFnbaseError` and subclasses | Fail-closed errors |
+
+Signatures: [docs/API.md](docs/API.md). Anything under `playground/` is reference code, not the public API.
+
+## Playground / wire
 
 `playground/` shows how to attach ux-fnbase to a hypermedia UI **without** importing Channel or MorphState into the database:
 
@@ -225,37 +231,31 @@ Exceeding a limit raises `LimitExceededError`. Limits are constants in `ux_fnbas
 
 Isolation Law and residual table: [docs/COMPOSE.md](docs/COMPOSE.md), [docs/WIRE.md](docs/WIRE.md).
 
----
-
 ## Testing
 
 ```bash
 export PYTHONPATH=src:.
 python -m pytest -q
-```
-
-Suites:
-
-- `tests/` — store, tokens, ids, **hypothesis properties**, chaos, asyncio wrappers
-- `playground/tests/test_isolation.py` — import graph Isolation Law
-- `playground/tests/test_residuals.py` — race / reset / equal-gen / intent / view snapshot
-- `benchmarks/bench_fanout.py` — formal subscription fanout numbers
-- `.github/workflows/ci.yml` — pytest + benchmark smoke on 3.11–3.14
-
-```bash
 PYTHONPATH=src:. python benchmarks/bench_fanout.py --subscribers 25 --mutations 50
 ```
 
-Expected: all tests pass on Python 3.11+ (CI: 3.11–3.14).
-
----
+- `tests/` — store, tokens, ids, hypothesis properties, chaos, asyncio wrappers
+- `playground/tests/test_isolation.py` — import graph Isolation Law
+- `playground/tests/test_residuals.py` — race / reset / equal-gen / intent / view snapshot
+- `.github/workflows/ci.yml` — pytest + benchmark smoke on 3.11–3.14
 
 ## Versioning
 
-SemVer. `0.y.z` may include breaking API changes. Public API is the export list in `ux_fnbase.__all__`. Anything under `playground/` is reference code and may move freely.
+SemVer. `0.y.z` may include breaking API changes. Public API is the export list in `ux_fnbase.__all__`. See [CHANGELOG.md](CHANGELOG.md).
 
----
+## Security
+
+Core **trusts the caller**. It does not authenticate, authorize, encrypt, or mint Caps. See [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+PRs are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) (setup, residual checklist) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Questions: [SUPPORT.md](SUPPORT.md). How the project is run: [GOVERNANCE.md](GOVERNANCE.md).
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE). Copyright the ux-fnbase contributors.
