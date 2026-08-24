@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a change that respects this layer's ownership boundary.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Features that belong on a sister layer (see README ownership table) will be redirected.
+  - type: input
+    id: package
+    attributes:
+      label: Package
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can you not do today with the public API?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Concrete API / CLI / wire change. Name the Diátaxis doc that would need updating.
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Does this stay inside this layer's ownership?
+      options:
+        - "Yes — this layer owns it"
+        - "Unsure — please triage"
+        - "No — it may belong on a sister package"
+    validations:
+      required: true

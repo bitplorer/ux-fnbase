@@ -1,0 +1,50 @@
+name: Bug report
+description: Something does not work the way the docs or public API say it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for a precise report. Security issues must go through SECURITY.md, not this form.
+  - type: input
+    id: package
+    attributes:
+      label: Package
+      placeholder: ux-dom / ux-channel / ux-behavior / ux-motion / ux-fnbase / ux-compose
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: "0.1.0 or git SHA"
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12.8"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Actual vs expected. Quote the public API you used (`__all__` / CLI).
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Smallest script or command. Prefer a copy-pasteable snippet.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      render: shell

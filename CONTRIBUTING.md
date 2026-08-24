@@ -58,3 +58,16 @@ Include:
 ## License
 
 Contributions are under Apache-2.0 (see [LICENSE](LICENSE)).
+
+## Community (health files)
+
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+| Topic | File |
+|-------|------|
+| Questions / where to file | [SUPPORT.md](SUPPORT.md) |
+| Vulnerabilities | [SECURITY.md](SECURITY.md) — private only |
+| How this repo is run | [GOVERNANCE.md](GOVERNANCE.md) |
+| Docs contract (Diátaxis + Standard Readme) | [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) |
+
+Use the issue forms under `.github/ISSUE_TEMPLATE/`. Security reports filed as public issues will be closed and asked to move to the advisory path.
