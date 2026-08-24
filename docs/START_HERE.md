@@ -33,6 +33,8 @@ define_table → @query / @mutation → run_query / run_mutation → subscribe
 3. **Subscribe** — callback when read-set ∩ write-set is non-empty and the canonical result changed.  
 4. **Fail closed** — nested mutation from a subscriber raises; thrown mutation does not advance generation.
 
+**Cookbook:** [SNIPPETS.md](SNIPPETS.md) — Store, schema, tokens, durability, fail-closed errors, asyncio.
+
 ## Run the smallest example
 
 ```bash

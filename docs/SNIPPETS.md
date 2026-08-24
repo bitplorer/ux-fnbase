@@ -7,15 +7,26 @@ Function database. Queries record a read-set. Mutations emit a write-set. Subscr
 
 Every block is meant to run (or to be the exact fragment you drop into a running app). Names are public exports. If code and this page disagree, **code wins**.
 
+**11 snippets** covering install, core usage, fail-closed errors, live/async, CLI, and the usage patterns that keep layers from leaking.
+
+### Public names in this cookbook
+
+`Store`, `TableSchema`, `string`, `literal`, `AtomicJsonBackend`, `run_query`, `run_mutation`, `integer`, `new_id`, `DocToken`, `IndexToken`, `ScanToken`, `intersects`, `PhaseError`
+
 ## Contents
 
 - [Install (stdlib core)](#fn-install)
 - [Store, schema, query, mutation, subscribe](#fn-store)
 - [Explain a query (read-set + generation)](#fn-explain)
 - [Durable file backend (atomic replace)](#fn-durable)
-- [Fail-closed errors](#fn-errors)
 - [get() and equality indexes](#fn-get-index)
+- [integer schema + new_id](#fn-schema-id)
+- [Read/write tokens and intersects()](#fn-tokens)
+- [Fail-closed errors](#fn-errors)
+- [Table / document / closed errors](#fn-table-errors)
 - [Optional asyncio wrappers](#fn-asyncio)
+- [Pattern: queries read, mutations write](#fn-pattern-purity)
+
 
 ## Install
 
@@ -32,6 +43,7 @@ pip install -e ".[dev]"          # pytest, hypothesis
 export PYTHONPATH=src:.
 python -c "from ux_fnbase import Store; print(Store)"
 ```
+
 
 ## Core usage
 
@@ -117,6 +129,70 @@ store = Store(backend=backend)
 # commit: persist-before-publish; durability failure rolls back pre-images
 ```
 
+### get() and equality indexes
+
+<a id="fn-get-index"></a>
+
+index(field).eq(value) only works for fields listed in define_table(..., indexes=(...)). Unindexed filters are table scans.
+
+```python
+@store.query
+def one(ctx, doc_id: str):
+    return ctx.db.table("tasks").get(doc_id)
+
+@store.query
+def doing(ctx):
+    return ctx.db.table("tasks").index("status").eq("doing").collect()
+
+print(store.run_query("one", {"doc_id": row["_id"]}))
+print(store.run_query("doing"))
+```
+
+### integer schema + new_id
+
+<a id="fn-schema-id"></a>
+
+integer() rejects bool (True is not an int). Unknown fields and missing fields raise SchemaViolationError.
+
+```python
+from ux_fnbase import Store, TableSchema, integer, string, new_id
+
+store = Store()
+store.define_table(
+    "items",
+    schema=TableSchema({
+        "sku": string(min_len=1, max_len=32),
+        "qty": integer(min_v=0, max_v=10_000),
+    }),
+)
+
+@store.mutation
+def stock(ctx, sku: str, qty: int):
+    return ctx.db.table("items").insert({"sku": sku, "qty": qty})
+
+row = store.run_mutation("stock", {"sku": "tee", "qty": 3})
+print(row["_id"], new_id())   # _id is assigned on insert; new_id() is public
+store.close()
+```
+
+### Read/write tokens and intersects()
+
+<a id="fn-tokens"></a>
+
+Subscriptions re-run only when read-set ∩ write-set is non-empty. ScanToken is conservative: any write on that table matches.
+
+```python
+from ux_fnbase import DocToken, IndexToken, ScanToken, intersects
+
+reads = (ScanToken("tasks"),)
+writes = (DocToken("tasks", "abc"), IndexToken("tasks", "status", "done"))
+print(intersects(reads, writes))  # True — a scan of tasks sees any write on tasks
+
+reads2 = (DocToken("tasks", "xyz"),)
+print(intersects(reads2, writes))  # False — different document id
+```
+
+
 ## Fail closed
 
 ### Fail-closed errors
@@ -155,26 +231,52 @@ except FunctionNotFoundError:
     print("missing")
 ```
 
-## Core usage
+### Table / document / closed errors
 
-### get() and equality indexes
+<a id="fn-table-errors"></a>
 
-<a id="fn-get-index"></a>
-
-index(field).eq(value) only works for fields listed in define_table(..., indexes=(...)). Unindexed filters are table scans.
+define_table is idempotent only when indexes and schema match. delete() on a missing id raises DocumentNotFoundError.
 
 ```python
-@store.query
-def one(ctx, doc_id: str):
-    return ctx.db.table("tasks").get(doc_id)
+from ux_fnbase import (
+    Store, TableExistsError, TableNotFoundError,
+    DocumentNotFoundError, StoreClosedError, FunctionExistsError,
+)
+
+store = Store()
+store.define_table("tasks")
+try:
+    store.define_table("tasks")
+except TableExistsError:
+    print("table exists")
 
 @store.query
-def doing(ctx):
-    return ctx.db.table("tasks").index("status").eq("doing").collect()
+def board(ctx):
+    return ctx.db.table("tasks").scan().collect()
 
-print(store.run_query("one", {"doc_id": row["_id"]}))
-print(store.run_query("doing"))
+try:
+    @store.query
+    def board(ctx):  # noqa: F811
+        return []
+except FunctionExistsError:
+    print("query name taken")
+
+@store.mutation
+def drop(ctx, doc_id: str):
+    ctx.db.table("tasks").delete(doc_id)
+
+try:
+    store.run_mutation("drop", {"doc_id": "missing"})
+except DocumentNotFoundError:
+    print("no such doc")
+
+store.close()
+try:
+    store.run_query("board")
+except StoreClosedError:
+    print("closed")
 ```
+
 
 ## Live / async
 
@@ -194,4 +296,34 @@ async def main():
     return result
 
 asyncio.run(main())
+```
+
+
+## Usage patterns
+
+### Pattern: queries read, mutations write
+
+<a id="fn-pattern-purity"></a>
+
+Phase machine is the product: query phase cannot write; notify phase cannot mutate. That is how nested-callback races die.
+
+```python
+from ux_fnbase import Store, PhaseError
+
+store = Store()
+store.define_table("tasks")
+
+@store.query
+def board(ctx):
+    # legal: get / scan / index().eq().collect()
+    return ctx.db.table("tasks").scan().collect()
+    # illegal: ctx.db.table("tasks").insert({...})  → PhaseError
+
+@store.mutation
+def add(ctx, title: str):
+    # legal: insert / patch / delete
+    return ctx.db.table("tasks").insert({"title": title})
+    # illegal: calling another mutation or subscribe() here → NestedTransactionError / PhaseError
+
+store.close()
 ```
